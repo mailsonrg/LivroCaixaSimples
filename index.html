@@ -1,0 +1,1386 @@
+﻿<?php
+include("./conf/config.php");
+protegePagina();
+include './conf/functions.php';
+require_once './conf/versao.php';
+$usuario = $_SESSION['usuarioID'];
+
+// Formato 24 horas (de 1 a 24)
+$hora = date('G');
+if (($hora >= 0) and ($hora < 5)) {
+    $mensagem = "Já é madrugada!";
+} else if (($hora >= 5) and ($hora < 6)) {
+    $mensagem = "Já esta amanhecendo!";
+} else if (($hora >= 6) and ($hora < 12)) {
+    $mensagem = "Bom dia,";
+} else if (($hora >= 12) and ($hora < 18)) {
+    $mensagem = "Boa tarde,";
+} else {
+    $mensagem = "Boa noite,";
+}
+
+//Apagar movimentos
+if (isset($_GET['acao']) && $_GET['acao'] == 'apagar') {
+    $id = $_GET['id'];
+    $log = mysqli_query($_SG['conexao'], "SELECT * FROM movimentos WHERE id='$id'");
+    $logexc = mysqli_fetch_array($log);
+    $idmov = $logexc['id'];
+    $tipomov = $logexc['tipo'];
+    $descmov = $logexc['descricao'];
+    $valormov = $logexc['valor'];
+    $catmov = $logexc['cat'];
+    $contamov = $logexc['conta'];
+    $dataexc = date("Ymd");
+    $id_comp_img = $logexc['comp_img'];
+
+    mysqli_query($_SG['conexao'], "INSERT INTO exclusoes (id_mov_exc,tipo_mov,desc_mov,valor_mov,cat_mov,conta_mov,data_exc,usuario_mov) values ('$idmov','$tipomov','$descmov','$valormov','$catmov','$contamov','$dataexc','$usuario')");
+    mysqli_query($_SG['conexao'], "DELETE FROM movimentos WHERE id='$id'");
+    mysqli_query($_SG['conexao'], "DELETE FROM historico WHERE id_mov='$id'");
+    $qr1 = mysqli_query($_SG['conexao'], "SELECT * FROM movimentos WHERE comp_img='$id_comp_img'");
+    $row1 = mysqli_fetch_array($qr1);
+    if (empty($row1)) {
+        mysqli_query($_SG['conexao'], "DELETE FROM comprovantes WHERE id='$id_comp_img'");
+    }
+    header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&ok=2");
+    exit();
+}
+
+//Editar categorias
+if (isset($_POST['acao']) && $_POST['acao'] == 'editar_cat') {
+    $id = $_POST['id'];
+    $nome = $_POST['nome'];
+
+    mysqli_query($_SG['conexao'], "UPDATE categorias SET nome='$nome' WHERE id='$id'");
+    echo mysqli_error($_SG['conexao']);
+    header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&cat_ok=3");
+    exit();
+}
+
+//Apagar categorias
+if (isset($_GET['acao']) && $_GET['acao'] == 'apagar_cat') {
+    $id = $_GET['id'];
+
+    $qr = mysqli_query(
+        $_SG['conexao'],
+        "SELECT c.id FROM movimentos g, categorias c WHERE c.id=g.cat && c.id=$id"
+    );
+    if (mysqli_num_rows($qr) !== 0) {
+        header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&cat_err=1");
+        exit();
+    } else {
+        mysqli_query($_SG['conexao'], "DELETE FROM categorias WHERE id='$id'");
+        echo mysqli_error($_SG['conexao']);
+        header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&cat_ok=2");
+        exit();
+    }
+}
+
+//Editar movimentos
+if (isset($_POST['acao']) && $_POST['acao'] == 'editar_mov') {
+    /*$file_tmp = $_FILES["file"]["tmp_name"];
+	$file_name = $_FILES["file"]["name"];
+	$file_type = $_FILES["file"]["type"];
+	$file_size = $_FILES["file"]["size"];
+	$dataimagen=date('dmyHi');
+	$nome_r1 = tirarAcentos($file_name);
+    $nome_r2 = str_replace(" ", "", $nome_r1);
+	$nome="$usuario.$dataimagen.$nome_r2";
+	$caminho="./upload_temp/$usuario.$dataimagen.$nome_r2";
+	$extensao = @strtolower(end(explode('.',$file_name)));
+	$extesoespermitidas= array('png','jpeg','jpg','bmp','pdf','doc','docx','xls','xlsx','html','xml','rar','zip');
+	$tamanhoemBytes=@round (($file_size / 1024) / 1024,2);
+	$tamanhoemMB=$tamanhoemBytes." MB";*/
+    $id = $_POST['id'];
+    $dia = $_POST['dia'];
+    $mes = $_POST['mes'];
+    $ano = $_POST['ano'];
+    $tipo = $_POST['tipo'];
+    $cat = $_POST['cat'];
+    $conta_lan = $_POST['conta'];
+    $descricao = $_POST['descricao'];
+    $valor = str_replace(",", ".", $_POST['valor']);
+    $dataed = date("Ymd");
+    $qred = mysqli_query($_SG['conexao'], "SELECT * FROM movimentos WHERE id='$id'");
+    $rowed = mysqli_fetch_array($qred);
+    //$comp_cad=$rowed['comp_img'];
+
+    if (empty($valor)) {
+        echo "<script>
+alert('O campo VALOR é obrigatório, e precisa ser diferente de zero para editar.'); location.href='index.php'; historico.go(-1);
+</script>";
+        exit();
+    }
+    if ($dia != $rowed['dia']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','1','$dataed','1','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+
+    if ($mes != $rowed['mes']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','2','$dataed','1','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+
+    if ($ano != $rowed['ano']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','3','$dataed','1','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+
+    if ($tipo != $rowed['tipo']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','4','$dataed','1','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+
+    if ($cat != $rowed['cat']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','5','$dataed','1','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+
+    if ($descricao != $rowed['descricao']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','6','$dataed','1','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+
+    if ($valor != $rowed['valor']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','7','$dataed','1','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+
+    if ($conta_lan != $rowed['conta']) {
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET dia='$dia', mes='$mes', ano='$ano', tipo='$tipo', cat='$cat', conta='$conta_lan', descricao='$descricao', valor='$valor', edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','8','$dataed','$conta_lan','$usuario')");
+        echo mysqli_error($_SG['conexao']);
+    }
+    if (!empty($file_tmp)) {
+        if (array_search($extensao, $extesoespermitidas) === false) {
+            echo "<script>
+			alert('São permitidos apenas arquivos nestes formatos: PNG, JPEG, PNG, BMP, PDF, DOC, DOCX, XLS, XLSX, HTML, XML, ZIP e RAR.'); location.href='index.php';
+			</script>";
+            exit();
+        }
+        if ($file_size > 7340032) {
+            echo "<script>
+			alert('O arquivo é muito grande. Tamanho maxímo 7Mb.'); location.href='index.php';
+			</script>";
+            exit();
+        }
+        if (empty($comp_cad)) {
+            copy($file_tmp, "$caminho");
+            $fp = fopen($caminho, "rb");
+            $filename = fread($fp, $file_size);
+            $filename = addslashes($filename);
+            fclose($fp);
+            mysqli_query($_SG['conexao'], "INSERT INTO comprovantes (comp, nome, tipo, ext, tamanho) values ('$filename','$nome','$file_type','$extensao','$tamanhoemMB')");
+            unlink($caminho);
+
+            $dados = mysqli_query($_SG['conexao'], "SELECT * FROM comprovantes WHERE id=(SELECT MAX(id) FROM comprovantes)");
+            $dados2 = mysqli_fetch_array($dados);
+            $id_img = $dados2['id'];
+            mysqli_query($_SG['conexao'], "UPDATE movimentos SET edicao='Editado', comp_img='$id_img' WHERE id='$id'");
+            mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','9','$dataed','$conta_lan','$usuario')");
+
+            header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&ok=1");
+            exit();
+        }
+
+        copy($file_tmp, "$caminho");
+        $fp = fopen($caminho, "rb");
+        $filename = fread($fp, $file_size);
+        $filename = addslashes($filename);
+        fclose($fp);
+        mysqli_query($_SG['conexao'], "UPDATE comprovantes SET comp='$filename', nome='$nome', tipo='$file_type', ext='$extensao', tamanho='$tamanhoemMB' WHERE id='$comp_cad'");
+        unlink($caminho);
+        mysqli_query($_SG['conexao'], "UPDATE movimentos SET edicao='Editado' WHERE id='$id'");
+        mysqli_query($_SG['conexao'], "INSERT INTO historico (id_mov,just_id,data,conta_mov,usuario) values ('$id','9','$dataed','$conta_lan','$usuario')");
+
+        header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&ok=1");
+        exit();
+    }
+}
+//Cadastrar categorias
+if (isset($_POST['acao']) && $_POST['acao'] == 2) {
+    $nome = $_POST['nome'];
+
+    mysqli_query($_SG['conexao'], "INSERT INTO categorias (nome,usuario) values ('$nome','$usuario')");
+    echo mysqli_error($_SG['conexao']);
+    header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&cat_ok=1");
+    exit();
+}
+
+//Lançar movimentos
+if (isset($_POST['acao']) && $_POST['acao'] == 1) {
+    $file_tmp = $_FILES["file"]["tmp_name"];
+    $file_name = $_FILES["file"]["name"];
+    $file_type = $_FILES["file"]["type"];
+    $file_size = $_FILES["file"]["size"];
+    $dataimagen = date('dmyHi');
+    $nome_r1 = tirarAcentos($file_name);
+    $nome_r2 = str_replace(" ", "", $nome_r1);
+    $nome = "$usuario.$dataimagen.$nome_r2";
+    $caminho = "./upload_temp/$usuario.$dataimagen.$nome_r2";
+    $extensao = @strtolower(end(explode('.', $file_name)));
+    $extesoespermitidas = array('png', 'jpeg', 'jpg', 'bmp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'html', 'xml', 'rar', 'zip');
+    $tamanhoemBytes = @round(($file_size / 1024) / 1024, 2);
+    $tamanhoemMB = $tamanhoemBytes . " MB";
+    $data = $_POST['data'];
+    $tipo = $_POST['tipo'];
+    $cat = $_POST['cat'];
+    $descricao = $_POST['descricao'];
+    $valor_recebido = str_replace(".", "", $_POST['valor']);
+    $valortotal = str_replace(",", ".", $valor_recebido);
+    $parcelas = $_POST['parcelas'];
+    $valor = @$valortotal / $parcelas;
+    $t = explode("/", $data);
+    $dia = $t[0];
+    $mes = $t[1];
+    $ano = $t[2];
+
+    if (empty($valor)) {
+        echo "<script>
+alert('O campo VALOR é obrigatório, e precisa ser diferente de zero.'); location.href='index.php'; historico.go(-1);
+</script>";
+        exit;
+    }
+    $n = 1;
+    if (!empty($file_tmp)) {
+        if (array_search($extensao, $extesoespermitidas) === false) {
+            echo "<script>
+			alert('São permitidos apenas arquivos nestes formatos: PNG, JPEG, PNG, BMP, PDF, DOC, DOCX, XLS, XLSX, HTML, XML, ZIP e RAR.'); location.href='index.php';
+			</script>";
+            exit();
+        }
+        if ($file_size > 7340032) {
+            echo "<script>
+			alert('O arquivo é muito grande. Tamanho maxímo 7Mb.'); location.href='index.php';
+			</script>";
+            exit();
+        }
+        copy($file_tmp, "$caminho");
+        $fp = fopen($caminho, "rb");
+        $filename = fread($fp, $file_size);
+        $filename = addslashes($filename);
+        fclose($fp);
+        mysqli_query($_SG['conexao'], "INSERT INTO comprovantes (comp, nome, tipo, ext, tamanho) values ('$filename','$nome','$file_type','$extensao','$tamanhoemMB')");
+        unlink($caminho);
+
+        while ($n <= $parcelas) {
+            $dados = mysqli_query($_SG['conexao'], "SELECT * FROM comprovantes WHERE id=(SELECT MAX(id) FROM comprovantes)");
+            $dados2 = mysqli_fetch_array($dados);
+            $id_img = $dados2['id'];
+            mysqli_query($_SG['conexao'], "INSERT INTO movimentos (dia,mes,ano,tipo,descricao,valor,cat,conta,nparcela,parcelas,usuario,comp_img) values ('$dia','$mes','$ano','$tipo','$descricao','$valor','$cat','1','$n','$parcelas','$usuario','$id_img')");
+
+            header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&ok=1");
+            if ($mes <= 11) {
+                $mes++;
+            } else {
+                $mes = 1;
+                $ano++;
+            }
+            $n++;
+        }
+        exit();
+    }
+
+    while ($n <= $parcelas) {
+        mysqli_query($_SG['conexao'], "INSERT INTO movimentos (dia,mes,ano,tipo,descricao,valor,cat,conta,nparcela,parcelas,usuario) values ('$dia','$mes','$ano','$tipo','$descricao','$valor','$cat','1','$n','$parcelas','$usuario')");
+
+        header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano'] . "&ok=1");
+        if ($mes <= 11) {
+            $mes++;
+        } else {
+            $mes = 1;
+            $ano++;
+        }
+        $n++;
+    }
+    exit();
+}
+
+//Cadastrar orçamento
+if (isset($_POST['acao']) && $_POST['acao'] == 'cad_orcamento') {
+    $valor_recebido = str_replace(".", "", $_POST['valor']);
+    $valor_orcamento = str_replace(",", ".", $valor_recebido);
+    $tipo = $_POST['tipo'];
+    $data = $_POST['data'];
+    $t = explode("/", $data);
+    $dia = $t[0];
+    $mes = $t[1];
+    $ano = $t[2];
+    $valida_meses = 12 - $mes + 1;
+
+    if (empty($valor_orcamento)) {
+        echo "<script>
+alert('O campo VALOR é obrigatório, e precisa ser diferente de zero.'); location.href='index.php'; historico.go(-1);
+</script>";
+        exit;
+    }
+    if ($tipo != 0) {
+        mysqli_query(
+            $_SG['conexao'],
+            "INSERT INTO orcamento (mes,ano,valor,conta,usuario) values ('$mes','$ano','$valor_orcamento','1','$usuario')"
+        );
+        echo mysqli_error($_SG['conexao']);
+        header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano']);
+        exit();
+    }
+    $n = 1;
+    while ($n <= $valida_meses) {
+        mysqli_query(
+            $_SG['conexao'],
+            "INSERT INTO orcamento (mes,ano,valor,conta,usuario) values ('$mes','$ano','$valor_orcamento','1','$usuario')"
+        );
+        echo mysqli_error($_SG['conexao']);
+        header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano']);
+        if ($mes <= 11) {
+            $mes++;
+        }
+        $n++;
+    }
+    exit();
+}
+
+//Editar orçamento
+if (isset($_POST['acao']) && $_POST['acao'] == 'ed_orcamento') {
+    $valor_recebido = str_replace(".", "", $_POST['valor']);
+    $valor_orcamento = str_replace(",", ".", $valor_recebido);
+    $tipo = $_POST['tipo'];
+    $data = $_POST['data'];
+    $t = explode("/", $data);
+    $dia = $t[0];
+    $mes = $t[1];
+    $ano = $t[2];
+    $valida_meses = 12 - $mes + 1;
+
+    if (empty($valor_orcamento)) {
+        echo "<script>
+alert('O campo VALOR é obrigatório, e precisa ser diferente de zero.'); location.href='index.php'; historico.go(-1);
+</script>";
+        exit();
+    }
+    if ($tipo != 0) {
+        mysqli_query($_SG['conexao'], "UPDATE orcamento SET valor='$valor_orcamento' WHERE mes='$mes' && conta='1' && usuario='$usuario'");
+        echo mysqli_error($_SG['conexao']);
+        header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano']);
+        exit();
+    }
+    mysqli_query($_SG['conexao'], "UPDATE orcamento SET valor='$valor_orcamento' WHERE mes>=$mes && ano='$ano' && conta='1' && usuario='$usuario'");
+    echo mysqli_error($_SG['conexao']);
+    header("Location: ?mes=" . $_GET['mes'] . "&ano=" . $_GET['ano']);
+    exit();
+}
+
+//Boas vindas em função da hora
+$hora = date('G');
+if (($hora >= 0) and ($hora < 5)) {
+    $mensagem = "Já é madrugada!";
+} else
+    if (($hora >= 5) and ($hora < 6)) {
+    $mensagem = "Já esta amanhecendo!";
+} else
+        if (($hora >= 6) and ($hora < 12)) {
+    $mensagem = "Bom dia,";
+} else
+            if (($hora >= 12) and ($hora < 18)) {
+    $mensagem = "Boa tarde,";
+} else {
+    $mensagem = "Boa noite,";
+}
+
+//Mês e ano hoje
+if (isset($_GET['mes']))
+    $mes_hoje = $_GET['mes'];
+else
+    $mes_hoje = date('m');
+
+if (isset($_GET['ano']))
+    $ano_hoje = $_GET['ano'];
+else
+    $ano_hoje = date('Y');
+
+?>
+
+<html>
+
+<head>
+
+    <title id='titulo'>LIVRO CAIXA</title>
+    <link href="./conf/img/favicon.png" rel="icon" type="image/png" />
+    <meta name="LANGUAGE" content="Portuguese" />
+    <meta name="AUDIENCE" content="all" />
+    <meta name="RATING" content="GENERAL" />
+    <link href="./conf/css/styles.css" rel="stylesheet" type="text/css" />
+    <link id="scrollUpTheme" rel="stylesheet" href="./conf/css/image.css">
+    <link rel="stylesheet" href="./conf/css/calculadora.css">
+    <script LANGUAGE="JavaScript" src="./conf/js/scripts.js"></script>
+    <script src="./conf/js/jquery.js"></script>
+    <script src="./conf/js/jquery.scroll.topo.js"></script>
+    <script src="./conf/js/jquery.easing.js"></script>
+    <script src="./conf/js/jquery.easing.compatibilidade.js"></script>
+    <script LANGUAGE="JavaScript" src="./conf/js/jquery.validar.formulario.js"></script>
+    <script src="./conf/js/jquery.calc.js"></script>
+    <script src="./conf/js/jquery.calculadora.js"></script>
+    <script>
+        function showTimer() {
+            var time = new Date();
+            var hour = time.getHours();
+            var minute = time.getMinutes();
+            var second = time.getSeconds();
+            if (hour < 10) hour = "0" + hour;
+            if (minute < 10) minute = "0" + minute;
+            if (second < 10) second = "0" + second;
+            var st = hour + ":" + minute + ":" + second;
+            document.getElementById("timer").innerHTML = st;
+        }
+
+        function initTimer() {
+
+            setInterval(showTimer, 1000);
+        }
+    </script>
+    <script>
+        (function($) {
+            $.getQuery = function(query) {
+                query = query.replace(/[\[]/, '\\\[').replace(/[\]]/, '\\\]');
+                var expr = '[\\?&]' + query + '=([^&#]*)';
+                var regex = new RegExp(expr);
+                var results = regex.exec(window.location.href);
+                if (results !== null) {
+                    return results[1];
+                } else {
+                    return false;
+                }
+            };
+        })(jQuery);
+
+        $(function() {
+
+            $('.image-switch').click(function() {
+                window.location = '?theme=image';
+            });
+
+            if ($.getQuery('theme') === 'image') {
+                $(function() {
+                    $.scrollUp({
+                        animation: 'fade',
+                        activeOverlay: 'false',
+                        scrollImg: {
+                            active: true,
+                            type: 'background',
+                            src: './conf/img/topo.png'
+                        }
+                    });
+                });
+                $('#scrollUpTheme').attr('href', './conf/css/image.css?1.1');
+                $('.image-switch').addClass('active');
+            } else {
+                $(function() {
+                    $.scrollUp({
+                        animation: 'slide',
+                        activeOverlay: 'false'
+                    });
+                });
+                $('#scrollUpTheme').attr('href', './conf/css/image.css?1.1');
+                $('.image-switch').addClass('active');
+            }
+        });
+    </script>
+    <script type="text/javascript">
+        $(document).ready(function() {
+            $('#formulario_lancamento').validate({
+                rules: {
+                    valor: {
+                        required: true,
+                    },
+                    parcelas: {
+                        required: true,
+                        digits: true
+                    },
+                },
+                messages: {
+                    valor: {
+                        required: "Campo obrigatório.",
+                    },
+                    parcelas: {
+                        required: "Campo obrigatório.",
+                        digits: "Digite apenas números."
+                    },
+                }
+            });
+        });
+    </script>
+    <script type="text/javascript">
+        $(document).ready(function() {
+            $('#form_alt_senha').validate({
+                rules: {
+                    novasenha: {
+                        required: true,
+                        minlength: 6
+                    },
+                    novasenhaconf: {
+                        required: true,
+                        equalTo: "#novasenha"
+                    },
+                },
+                messages: {
+                    novasenha: {
+                        required: "Campo obrigatório.",
+                        minlength: "Mínimo 6 caracteres."
+                    },
+                    novasenhaconf: {
+                        required: "Campo obrigatório.",
+                        equalTo: "Senhas não conferem."
+                    },
+                }
+            });
+        });
+    </script>
+    <script>
+        function passwordStrength(password) {
+            var desc = new Array();
+            desc[0] = "";
+            desc[1] = "";
+            desc[2] = "";
+            desc[3] = "";
+            desc[4] = "";
+            desc[5] = "";
+            var score = 0;
+            if (password.length > 6) score++;
+            if ((password.match(/[a-z]/)) && (password.match(/[A-Z]/))) score++;
+            if (password.match(/\d+/)) score++;
+            if (password.match(/.[!,@,#,$,%,^,&,*,?,_,~,-,(,)]/)) score++;
+            if (password.length > 12) score++;
+            document.getElementById("passwordDescription").innerHTML = desc[score];
+            document.getElementById("passwordStrength").className = "strength" + score;
+        }
+    </script>
+    <script>
+        $(function() {
+            $.calculator.setDefaults({
+                showOn: 'both',
+                buttonImageOnly: true,
+                buttonImage: './conf/img/calc.png'
+            });
+
+            $('#valororcamento').calculator({
+                layout: $.calculator.scientificLayout
+            }); //Calculadora cientifica para lançamento de orçamento
+            $('#edorcamento').calculator({
+                layout: $.calculator.scientificLayout
+            }); //Calculadora cientifica para edição de orçamento
+        });
+    </script>
+
+
+</head>
+
+<body style="padding:10px" onLoad="initTimer();">
+
+    <table cellpadding="1" cellspacing="10" width="1000" align="center" style="background-color:#033; border-radius: 0px 0px 15px 15px">
+        <tr>
+            <td colspan="11" style="background-color:#005B5B; border-radius: 0px 10px 0px 10px">
+                <h2 style="margin:5px"><a href=index.php style="color:#FFF; font-size:25px" >Livro Caixa - Simples</a></h2>
+            </td>
+            <td colspan="2" align="right" style="background-color:#005B5B; border-radius: 10px 0px 10px 0px">
+                <a style="color:#FFF" href="?mes=<?php echo date('m') ?>&ano=<?php echo date('Y') ?>">Hoje:<strong> <?php echo
+                                                                                                                    date('d') ?> de <?php echo
+                mostraMes(date('m')) ?> de <?php echo
+                            date('Y') ?></strong><br></strong> Hora: <strong><span id="timer"></span></strong></a>
+            </td>
+        </tr>
+        <tr>
+            <td width="50">
+                <select style="border-radius: 5px 5px 5px 5px;" onchange="location.replace('?mes=<?php echo $mes_hoje ?>&ano='+this.value)">
+                    <?php
+                    for ($i = 2023; $i <= 2030; $i++) {
+                    ?>
+                        <option value="<?php echo $i ?>" <?php if ($i == $ano_hoje)
+                                                                echo "selected=selected" ?>><?php echo
+                                    $i ?></option>
+                    <?php } ?>
+                </select>
+            </td>
+            <?php
+            for ($i = 1; $i <= 12; $i++) {
+            ?>
+                <td align="center" style="<?php if ($i != 12)
+                                                echo "border-right:1px solid #FFF;" ?> padding-right:5px">
+                    <a href="?mes=<?php echo $i ?>&ano=<?php echo $ano_hoje ?>" style="
+    <?php if ($mes_hoje == $i) { ?>    
+    color:#033; font-size:16px; font-weight:bold; background-color:#FFF; border-radius: 5px 5px 5px 5px; padding:5px
+    <?php } else { ?>
+    color:#FFF; font-size:16px;
+    <?php } ?>
+    ">
+                        <?php echo mostraMes($i); ?>
+                    </a>
+                </td>
+            <?php
+            }
+            ?>
+        </tr>
+    </table>
+
+    <table cellpadding="5" cellspacing="0" width="1000" align="center">
+        <tr>
+            <?php
+            $qrvisita = mysqli_query($_SG['conexao'], "SELECT * FROM usuarios where id='$usuario'");
+            $rowvisita = mysqli_fetch_array($qrvisita);
+
+            $qracesso = mysqli_query($_SG['conexao'], "SELECT * FROM usuarios where id='$usuario'");
+            $rowacesso = mysqli_fetch_array($qracesso);
+            $n = $rowacesso['n_acesso_f'];
+            $n_acesso = $n + 1;
+            ?>
+            <td>
+                <b>
+                    <font color="#000" size=1><?php if ($n > 0)
+                                                    echo "Último acesso: " . date('d/m/Y H:i:s', strtotime($rowvisita['ultimavisita']));
+                                                else
+                                                    echo "" ?></font>&nbsp;&nbsp;&nbsp;
+                    <b>
+                        <font color="#000" size=1><?php echo "Acesso Nº: " ?><?php if ($n = 0)
+                                                                                    echo "1";
+                                                                                else
+                                                                                    echo "$n_acesso" ?></font>
+                    </b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            </td>
+            <td>
+                <font color="#000"><?php echo $mensagem ?><?php echo " " ?><?php echo $_SESSION['usuarioNome']; ?><?php echo
+                                                                                                                    " " ?><?php echo
+        $_SESSION['usuarioSobrenome']; ?>.</font></b>
+            </td>
+            <td align="right" style="font-size:13px; color:rgba(4, 45, 191, 1)">
+                <a href="javascript:;" style="font-size:12px; color:rgba(4, 45, 191, 1)" onclick="abreFecha('alterar_senha')">[ Alterar senha ]</a>
+                <a href="logout.php" style="font-size:12px; color:rgba(4, 45, 191, 1)"><?php echo
+                                                                                        " [ Fazer logout ]" ?></a>
+            </td>
+        </tr>
+        <tr>
+            <td>
+
+            </td>
+        </tr>
+    </table>
+
+    <table cellpadding="5" cellspacing="0" width="1000" align="center">
+        <tr style="display:none; background-color:#E0E0E0" id="alterar_senha">
+            <td align="left">
+                <form id="form_alt_senha" method="post" action="cadastro.php">
+                    <input type="hidden" name="acao" value="alterar_senha" />
+                    <input type="hidden" name="pagina" value="index.php" />
+                    <input type="hidden" name="usuario" value="<?php echo $usuario ?>" />
+                    <b>Nova senha:</b>
+                    <font color="#FF0000" size=2><input type="password" name="novasenha" id="novasenha" onkeyup="passwordStrength(this.value)"></font> <b>Confirmar nova senha:</b>
+                    <font color="#FF0000" size=2><input type="password" name="novasenhaconf" id="novasenhaconf"></font><br>
+                    <label for="passwordStrength">
+                        <font size=2>Força da senha</font>
+                    </label><br>
+                    <div id="passwordDescription"></div>
+                    <div id="passwordStrength" class="strength0"></div>
+                    <p align="right">
+                        <input type="submit" class="input" value="Alterar" />
+                    </p>
+                </form>
+            </td>
+        </tr>
+    </table>
+
+    <table cellpadding="5" cellspacing="0" width="1000" align="center">
+        <?php
+        $qr = mysqli_query(
+            $_SG['conexao'],
+            "SELECT SUM(valor) as total FROM orcamento WHERE mes='$mes_hoje' && ano='$ano_hoje' && conta=1 && usuario='$usuario'"
+        );
+        $row = mysqli_fetch_array($qr);
+        $total = $row['total'];
+
+        $qr = mysqli_query(
+            $_SG['conexao'],
+            "SELECT SUM(valor) as total FROM movimentos WHERE tipo=0 && conta=1 && usuario='$usuario' && mes='$mes_hoje' && ano='$ano_hoje'"
+        );
+        $row = mysqli_fetch_array($qr);
+        $gasto = $row['total'];
+        $resta = $total - $gasto;
+
+        if ($total > 0) {
+            $percento = @round(($gasto / $total) * 100, 2);
+
+            if ($percento > 100) {
+                $comp = 100;
+            }
+            if ($percento <= 100) {
+                $comp = $percento;
+            }
+        } else {
+            $percento = '-1';
+            $comp = '100';
+        }
+
+        //Percentual do orçamento anual
+        $qra = mysqli_query(
+            $_SG['conexao'],
+            "SELECT SUM(valor) as total FROM orcamento WHERE ano='$ano_hoje' && conta=1 && usuario='$usuario'"
+        );
+        $rowa = mysqli_fetch_array($qra);
+        $total_ano = $rowa['total'];
+
+        $qra = mysqli_query(
+            $_SG['conexao'],
+            "SELECT SUM(valor) as total FROM movimentos WHERE tipo=0 && conta=1 && usuario='$usuario' && ano='$ano_hoje'"
+        );
+        $rowa = mysqli_fetch_array($qra);
+        $gasto_ano = $rowa['total'];
+        $resta_ano = $total_ano - $gasto_ano;
+
+        if ($total_ano > 0) {
+            $percento_ano = @round(($gasto_ano / $total_ano) * 100, 2);
+
+            if ($percento_ano > 100) {
+                $comp_ano = 100;
+            }
+            if ($percento_ano <= 100) {
+                $comp_ano = $percento_ano;
+            }
+        } else {
+            $percento_ano = '-1';
+            $comp_ano = '100';
+        }
+
+        //Percentual do orçamento dos cartões
+        $qrc = mysqli_query(
+            $_SG['conexao'],
+            "SELECT SUM(valor) as total FROM orcamento WHERE mes='$mes_hoje' && ano='$ano_hoje' && conta!=1 && usuario='$usuario'"
+        );
+        $rowc = mysqli_fetch_array($qrc);
+        $total_cart = $rowc['total'];
+
+        $qrc = mysqli_query(
+            $_SG['conexao'],
+            "SELECT SUM(valor) as total FROM movimentos WHERE tipo=0 && conta!=1 && usuario='$usuario' && mes='$mes_hoje' && ano='$ano_hoje'"
+        );
+        $rowc = mysqli_fetch_array($qrc);
+        $gasto_cart = $rowc['total'];
+        $resta_cart = $total_cart - $gasto_cart;
+
+        if ($total_cart > 0) {
+            $percento_cart = @round(($gasto_cart / $total_cart) * 100, 2);
+
+            if ($percento_cart > 100) {
+                $comp_cart = 100;
+            }
+            if ($percento_cart <= 100) {
+                $comp_cart = $percento_cart;
+            }
+        } else {
+            $percento_cart = '-1';
+            $comp_cart = '100';
+        }
+        ?>
+        <tr style="display:none;" id="orcamento">
+            <td align="left" style="font-size:11px; color:rgb(0, 0, 0)">
+                <a href="javascript:;" style="font-size:12px" onclick="abreFecha('lancar_orcamento')" title="Gereciar orçamento">Orçamento mensal: <?php echo
+                                                                                                                                                    formata_dinheiro($gasto) ?><?php echo
+                            " de " ?><?php echo
+            formata_dinheiro($total) ?><?php echo
+                            " resta " ?><font color="<?php if (
+                                $resta <=
+                                0
+                            )
+                                echo "#C00" ?>"><?php echo
+                    formata_dinheiro($resta) ?></font>.</a><br>
+                <style type="text/CSS">
+                    .outter{
+	height:20px;
+	width:1000px;
+	border:solid 1px #000;
+}
+.inner{
+	height:20px;
+	width:<?php echo $comp ?>%;
+	background: <?php if ($percento <= 0)
+                    echo "rgb(240,240,240); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(240,240,240,1) 0%, rgba(228,228,228,1) 50%, rgba(223,223,223,1) 51%, rgba(240,240,240,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(240,240,240,1) 0%,rgba(228,228,228,1) 50%,rgba(223,223,223,1) 51%,rgba(240,240,240,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(240,240,240,1) 0%,rgba(228,228,228,1) 50%,rgba(223,223,223,1) 51%,rgba(240,240,240,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f0f0f0', endColorstr='#f0f0f0',GradientType=0 ); /* IE6-9 */";
+                else
+        if (($percento > 0) and ($percento <= 65))
+                    echo "rgb(180,221,180); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(180,221,180,1) 0%, rgba(131,199,131,1) 4%, rgba(131,199,131,1) 4%, rgba(131,199,131,1) 30%, rgba(131,199,131,1) 42%, rgba(0,138,0,1) 100%, rgba(0,87,0,1) 100%, rgba(0,36,0,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(180,221,180,1) 0%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 30%,rgba(131,199,131,1) 42%,rgba(0,138,0,1) 100%,rgba(0,87,0,1) 100%,rgba(0,36,0,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(180,221,180,1) 0%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 30%,rgba(131,199,131,1) 42%,rgba(0,138,0,1) 100%,rgba(0,87,0,1) 100%,rgba(0,36,0,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#b4ddb4', endColorstr='#002400',GradientType=0 ); /* IE6-9 */";
+                else
+            if (($percento > 65) and ($percento <= 85))
+                    echo "rgb(252,243,188); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(252,243,188,1) 0%, rgba(252,232,78,1) 50%, rgba(248,219,0,1) 51%, rgba(251,239,147,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(252,243,188,1) 0%,rgba(252,232,78,1) 50%,rgba(248,219,0,1) 51%,rgba(251,239,147,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(252,243,188,1) 0%,rgba(252,232,78,1) 50%,rgba(248,219,0,1) 51%,rgba(251,239,147,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fcf3bc', endColorstr='#fbef93',GradientType=0 ); /* IE6-9 */";
+                else
+                    echo "rgb(246,25,0); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(246,25,0,1) 16%, rgba(186,0,0,1) 47%, rgba(246,25,0,1) 87%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(246,25,0,1) 16%,rgba(186,0,0,1) 47%,rgba(246,25,0,1) 87%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(246,25,0,1) 16%,rgba(186,0,0,1) 47%,rgba(246,25,0,1) 87%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f61900', endColorstr='#f61900',GradientType=0 ); /* IE6-9 */" ?>
+}
+</style>
+                <style type="text/CSS">
+                    .outter2{
+	height:20px;
+	width:1000px;
+	border:solid 1px #000;
+}
+.inner2{
+	height:20px;
+	width:<?php echo $comp_ano ?>%;
+	background: <?php if ($percento_ano <= 0)
+                    echo "rgb(240,240,240); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(240,240,240,1) 0%, rgba(228,228,228,1) 50%, rgba(223,223,223,1) 51%, rgba(240,240,240,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(240,240,240,1) 0%,rgba(228,228,228,1) 50%,rgba(223,223,223,1) 51%,rgba(240,240,240,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(240,240,240,1) 0%,rgba(228,228,228,1) 50%,rgba(223,223,223,1) 51%,rgba(240,240,240,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f0f0f0', endColorstr='#f0f0f0',GradientType=0 ); /* IE6-9 */";
+                else
+                    if (($percento_ano > 0) and ($percento_ano <= 65))
+                    echo "rgb(180,221,180); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(180,221,180,1) 0%, rgba(131,199,131,1) 4%, rgba(131,199,131,1) 4%, rgba(131,199,131,1) 30%, rgba(131,199,131,1) 42%, rgba(0,138,0,1) 100%, rgba(0,87,0,1) 100%, rgba(0,36,0,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(180,221,180,1) 0%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 30%,rgba(131,199,131,1) 42%,rgba(0,138,0,1) 100%,rgba(0,87,0,1) 100%,rgba(0,36,0,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(180,221,180,1) 0%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 30%,rgba(131,199,131,1) 42%,rgba(0,138,0,1) 100%,rgba(0,87,0,1) 100%,rgba(0,36,0,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#b4ddb4', endColorstr='#002400',GradientType=0 ); /* IE6-9 */";
+                else
+                        if (($percento_ano > 65) and ($percento_ano <= 85))
+                    echo "rgb(252,243,188); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(252,243,188,1) 0%, rgba(252,232,78,1) 50%, rgba(248,219,0,1) 51%, rgba(251,239,147,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(252,243,188,1) 0%,rgba(252,232,78,1) 50%,rgba(248,219,0,1) 51%,rgba(251,239,147,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(252,243,188,1) 0%,rgba(252,232,78,1) 50%,rgba(248,219,0,1) 51%,rgba(251,239,147,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fcf3bc', endColorstr='#fbef93',GradientType=0 ); /* IE6-9 */";
+                else
+                    echo "rgb(246,25,0); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(246,25,0,1) 16%, rgba(186,0,0,1) 47%, rgba(246,25,0,1) 87%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(246,25,0,1) 16%,rgba(186,0,0,1) 47%,rgba(246,25,0,1) 87%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(246,25,0,1) 16%,rgba(186,0,0,1) 47%,rgba(246,25,0,1) 87%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f61900', endColorstr='#f61900',GradientType=0 ); /* IE6-9 */" ?>
+}
+</style>
+                <style type="text/CSS">
+                    .outter3{
+	height:20px;
+	width:1000px;
+	border:solid 1px #000;
+}
+.inner3{
+	height:20px;
+	width:<?php echo $comp_cart ?>%;
+	background: <?php if ($percento_cart <= 0)
+                    echo "rgb(240,240,240); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(240,240,240,1) 0%, rgba(228,228,228,1) 50%, rgba(223,223,223,1) 51%, rgba(240,240,240,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(240,240,240,1) 0%,rgba(228,228,228,1) 50%,rgba(223,223,223,1) 51%,rgba(240,240,240,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(240,240,240,1) 0%,rgba(228,228,228,1) 50%,rgba(223,223,223,1) 51%,rgba(240,240,240,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f0f0f0', endColorstr='#f0f0f0',GradientType=0 ); /* IE6-9 */";
+                else
+                                if (($percento_cart > 0) and ($percento_cart <= 65))
+                    echo "rgb(180,221,180); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(180,221,180,1) 0%, rgba(131,199,131,1) 4%, rgba(131,199,131,1) 4%, rgba(131,199,131,1) 30%, rgba(131,199,131,1) 42%, rgba(0,138,0,1) 100%, rgba(0,87,0,1) 100%, rgba(0,36,0,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(180,221,180,1) 0%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 30%,rgba(131,199,131,1) 42%,rgba(0,138,0,1) 100%,rgba(0,87,0,1) 100%,rgba(0,36,0,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(180,221,180,1) 0%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 4%,rgba(131,199,131,1) 30%,rgba(131,199,131,1) 42%,rgba(0,138,0,1) 100%,rgba(0,87,0,1) 100%,rgba(0,36,0,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#b4ddb4', endColorstr='#002400',GradientType=0 ); /* IE6-9 */";
+                else
+                                    if (($percento_cart > 65) and ($percento_cart <= 85))
+                    echo "rgb(252,243,188); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(252,243,188,1) 0%, rgba(252,232,78,1) 50%, rgba(248,219,0,1) 51%, rgba(251,239,147,1) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(252,243,188,1) 0%,rgba(252,232,78,1) 50%,rgba(248,219,0,1) 51%,rgba(251,239,147,1) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(252,243,188,1) 0%,rgba(252,232,78,1) 50%,rgba(248,219,0,1) 51%,rgba(251,239,147,1) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fcf3bc', endColorstr='#fbef93',GradientType=0 ); /* IE6-9 */";
+                else
+                    echo "rgb(246,25,0); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(246,25,0,1) 16%, rgba(186,0,0,1) 47%, rgba(246,25,0,1) 87%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top,  rgba(246,25,0,1) 16%,rgba(186,0,0,1) 47%,rgba(246,25,0,1) 87%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom,  rgba(246,25,0,1) 16%,rgba(186,0,0,1) 47%,rgba(246,25,0,1) 87%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f61900', endColorstr='#f61900',GradientType=0 ); /* IE6-9 */" ?>
+}
+</style>
+                <div class="outter">
+                    <div class="inner">
+                        <center><?php if ($percento < 0)
+                                    echo "Não " . "há " . "orçamento " . "cadastrado.";
+                                else
+                                    echo $percento . "%" ?></center>
+                    </div>
+                </div>
+                <a href="javascript:;" style="font-size:12px" onclick="abreFecha('orcamento_anual')" title="Exibir orçamento anual">[ Exibir orçamento anual ]</a>
+                <a href="javascript:;" style="font-size:12px" onclick="abreFecha('orcamento_cartoes')" title="Exib. orçamento mensal cartões">[ Exib. orçamento cartões ]</a>
+            </td>
+        </tr>
+        <tr style="display:none; background-color:#E0E0E0" id="lancar_orcamento">
+            <td>
+                <a href="javascript:;" style="font-size:12px; color:rgba(4, 45, 191, 1)" onclick="abreFecha('cad_orcamento')" title="Cadastre apenas uma vez."> [ Cad. Orçamento ]</a>
+                <a href="javascript:;" style="font-size:12px; color:rgba(4, 45, 191, 1)" onclick="abreFecha('ed_orcamento')" title="Edite um ou mais meses"> [ Editar Orçamento ]</a>
+                </dt>
+        </tr>
+        <tr style="display:none; background-color:#E0E0E0" id="cad_orcamento">
+            <td>
+                <form method="post" action="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>">
+                    <input type="hidden" name="acao" value="cad_orcamento" />
+                    Valor do orçamento: R$ <input type=text value="<?php echo $total ?>" name=valor id="valororcamento" length=15 onKeyPress="return(FormataReais(this,'.',',',event))">&nbsp;|&nbsp;
+                    <input type="radio" name="tipo" value="1" checked /> Este mês &nbsp;
+                    <input type="radio" name="tipo" value="0" /> Este ano &nbsp;|&nbsp;
+                    Data inicial: <input type="text" name="data" size="11" maxlength="10" value="<?php echo
+                                                                                                    date('d') ?>/<?php echo
+                $mes_hoje ?>/<?php echo
+                $ano_hoje ?>" />
+                    <input type="submit" class="input" value="Gravar" />
+                </form>
+            </td>
+        </tr>
+        <tr style="display:none; background-color:#E0E0E0" id="ed_orcamento">
+            <td>
+                <form method="post" action="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>">
+                    <input type="hidden" name="acao" value="ed_orcamento" />
+                    Novo valor: R$ <input type=text value="<?php echo $total ?>" name=valor id="edorcamento" length=15 onKeyPress="return(FormataReais(this,'.',',',event))">&nbsp;|&nbsp;
+                    <input type="radio" name="tipo" value="1" checked /> Somente este &nbsp;
+                    <input type="radio" name="tipo" value="0" /> Este e futuros&nbsp;|&nbsp;
+                    Data inicial: <input type="text" name="data" size="11" maxlength="10" value="<?php echo
+                                                                                                    date('d') ?>/<?php echo
+                $mes_hoje ?>/<?php echo
+                $ano_hoje ?>" />
+                    <input type="submit" class="input" value="Gravar" />
+                </form>
+            </td>
+        </tr>
+        <tr style="display:none;" id="orcamento_anual">
+            <td style="font-size:11px; color:rgb(0, 0, 0)">
+                <a href="javascript:;" style="font-size:12px" title="Orçamento anual">Orçamento anual: <?php echo
+                                                                                                        formata_dinheiro($gasto_ano) ?><?php echo
+                                " de " ?><?php echo
+            formata_dinheiro($total_ano) ?><?php echo
+                                " resta " ?><font color="<?php if (
+                                $resta_ano <=
+                                0
+                            )
+                                echo "#C00" ?>"><?php echo
+                                                                formata_dinheiro($resta_ano) ?></font>.</a><br>
+                <div class="outter2">
+                    <div class="inner2">
+                        <center><?php if ($percento_ano < 0)
+                                    echo "Não " . "há " . "orçamento " . "cadastrado.";
+                                else
+                                    echo $percento_ano . "%" ?></center>
+                    </div>
+                </div>
+                </dt>
+        </tr>
+        <tr style="display:none;" id="orcamento_cartoes">
+            <td style="font-size:11px; color:rgb(0, 0, 0)">
+                <a href="javascript:;" style="font-size:12px" title="Orçamento mensal cartões">Orçamento mensal cartões: <?php echo
+                                                                                                                            formata_dinheiro($gasto_cart) ?><?php echo
+                                " de " ?><?php echo
+            formata_dinheiro($total_cart) ?><?php echo
+                                " resta " ?><font color="<?php if (
+                                $resta_cart <=
+                                0
+                            )
+                                echo "#C00" ?>"><?php echo
+                                                                        formata_dinheiro($resta_cart) ?></font>.</a><br>
+                <div class="outter3">
+                    <div class="inner3">
+                        <center><?php if ($percento_cart < 0)
+                                    echo "Não " . "há " . "orçamento " . "cadastrado.";
+                                else
+                                    echo $percento_cart . "%" ?></center>
+                    </div>
+                </div>
+                </dt>
+        </tr>
+    </table>
+
+    <table cellpadding="10" cellspacing="0" width="1000" align="center">
+        <tr width="1000">
+            <td colspan="2">
+                <h2><?php echo mostraMes($mes_hoje) ?>/<?php echo $ano_hoje ?></h2>
+            </td>
+            <td align="right">
+                <a href="javascript:;" onclick="abreFecha('add_cat')" class="bnt" style="border-radius: 5px 5px 5px 5px">[+] Forma de Pagamento</a>
+                <a href="javascript:;" onclick="abreFecha('add_movimento')" class="bnt" style="border-radius: 5px 5px 5px 5px"><strong>[+] Adicionar Movimento</strong></a>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="3">
+                <?php
+                if (isset($_GET['cat_err']) && $_GET['cat_err'] == 1) {
+                ?>
+                    <div style="padding:5px; background-color:#FF6; text-align:center; color:#030">
+                        <strong>Esta forma de pagamento não pode ser removida, pois há movimentos associados a mesma</strong>
+                    </div>
+
+                <?php } ?>
+
+                <?php
+                if (isset($_GET['cat_ok']) && $_GET['cat_ok'] == 2) {
+                ?>
+
+                    <div style="padding:5px; background-color:#9CC; text-align:center; color:#000">
+                        <strong>Categoria removida com sucesso!</strong>
+                    </div>
+
+                <?php } ?>
+
+                <?php
+                if (isset($_GET['cat_ok']) && $_GET['cat_ok'] == 1) {
+                ?>
+
+                    <div style="padding:5px; background-color:#9CC; text-align:center; color:#000">
+                        <strong>Categoria Cadastrada com sucesso!</strong>
+                    </div>
+
+                <?php } ?>
+
+                <?php
+                if (isset($_GET['cat_ok']) && $_GET['cat_ok'] == 3) {
+                ?>
+
+                    <div style="padding:5px; background-color:#9CC; text-align:center; color:#000">
+                        <strong>Categoria alterada com sucesso!</strong>
+                    </div>
+                <?php } ?>
+
+                <?php
+                if (isset($_GET['ok']) && $_GET['ok'] == 1) {
+                ?>
+
+                    <div style="padding:5px; background-color:#9CC; text-align:center; color:#000">
+                        <strong>Movimento Cadastrado com sucesso!</strong>
+                    </div>
+
+                <?php } ?>
+
+                <?php
+                if (isset($_GET['ok']) && $_GET['ok'] == 2) {
+                ?>
+
+                    <div style="padding:5px; background-color:#900; text-align:center; color:#FFF">
+                        <strong>Movimento removido com sucesso!</strong>
+                    </div>
+
+                <?php } ?>
+
+                <?php
+                if (isset($_GET['ok']) && $_GET['ok'] == 3) {
+                ?>
+
+                    <div style="padding:5px; background-color:#9CC; text-align:center; color:#000">
+                        <strong>Movimento alterado com sucesso!</strong>
+                    </div>
+                <?php } ?>
+
+                <div style=" background-color:#F1F1F1; padding:10px; border:1px solid #999; margin:5px; display:none" id="add_cat">
+                    <h3>Adicionar Forma de Pagamento</h3>
+
+                    <table width="100%">
+                        <tr>
+                            <td valign="top">
+                                <form method="post" action="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>">
+                                    <input type="hidden" name="acao" value="2" />
+                                    Nome: <input type="text" name="nome" size="20" maxlength="50" />
+                                    <br />
+                                    <br />
+
+                                    <input type="submit" class="input" value="Gravar" />
+                                </form>
+                            </td>
+                            <td valign="top" align="right">
+                                <b>Editar/Remover Forma de Pagamento:</b><br /><br />
+                                <?php
+                                $qr = mysqli_query($_SG['conexao'], "SELECT id, nome FROM categorias where usuario='$usuario' ORDER BY nome");
+                                while ($row = mysqli_fetch_array($qr)) {
+                                ?>
+                                    <div id="editar2_cat_<?php echo $row['id'] ?>"> <?php echo $row['nome'] ?>
+
+                                        <a style="font-size:10px; color:rgba(4, 45, 191, 1) onclick="return confirm('Tem certeza que deseja remover esta categoria?\nAtenção: Apenas categorias sem movimentos associados poderão ser removidas.')" href="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>&acao=apagar_cat&id=<?php echo $row['id'] ?>" title="Remover">[remover]</a> <a href="javascript:;" style="font-size:12px; color:rgba(4, 45, 191, 1)" onclick="document.getElementById('editar_cat_<?php echo $row['id'] ?>').style.display=''; document.getElementById('editar2_cat_<?php echo $row['id'] ?>').style.display='none'" title="Editar">[editar]</a>
+
+                                    </div>
+                                    <div style="display:none" id="editar_cat_<?php echo $row['id'] ?>">
+
+                                        <form method="post" action="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>">
+                                            <input type="hidden" name="acao" value="editar_cat" />
+                                            <input type="hidden" name="id" value="<?php echo $row['id'] ?>" />
+                                            <input type="text" name="nome" value="<?php echo $row['nome'] ?>" size="20" maxlength="50" />
+                                            <input type="submit" class="input" value="Alterar" />
+                                        </form>
+                                    </div>
+
+                                <?php } ?>
+
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style=" background-color:#F1F1F1; padding:10px; border:1px solid #999; margin:5px; display:none" id="add_movimento">
+                    <h3><b>Adicionar Movimento</b></h3>
+                    <?php
+                    $qr = mysqli_query($_SG['conexao'], "SELECT id, nome FROM categorias where usuario='$usuario' ORDER BY nome");
+                    if (mysqli_num_rows($qr) == 0) echo "Adicione ao menos uma categoria";
+
+                    else {
+                    ?>
+                        <form id="formulario_lancamento" enctype="multipart/form-data" method="post" action="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>">
+                            <input type="hidden" name="acao" value="1" />
+                            <strong>Data: </strong>
+                            <input type="text" name="data" size="11" maxlength="10" value="<?php echo date('d') ?>/<?php echo date('m') ?>/<?php echo date('Y') ?>" /> &nbsp; | &nbsp;
+                            <strong>Tipo:</strong>
+                            <label for="tipo_receita" style="color:rgba(4, 45, 191, 1)"><input type="radio" name="tipo" value="1" checked id="tipo_receita" /> Receita</label>&nbsp;
+                            <label for="tipo_despesa" style="color:#C00"><input type="radio" name="tipo" value="0" id="tipo_despesa" /> Despesa</label> &nbsp; | &nbsp;
+                            <strong>Forma de Pagamento:</strong>
+                            <select name="cat">
+                                <?php
+                                while ($row = mysqli_fetch_array($qr)) {
+                                ?>
+                                    <option value="<?php echo $row['id'] ?>"><?php echo $row['nome'] ?></option>
+                                <?php } ?>
+                            </select>
+
+                            <br />
+                            <br />
+
+                            <strong>Descrição: </strong><input type="text" name="descricao" size="45" maxlength="255" />
+                            &nbsp; | &nbsp;
+                            <strong>Valor:</strong> R$ <font color="#FF0000" size=2><input type=text name=valor id="valor" length=15 onKeyPress="return(FormataReais(this,'.',',',event))"></font>
+                            <font color="#FF0000" size=2><input type="hidden" value="1" name="parcelas" size="2" maxlength="4" id="parcelas" /></font>&nbsp;
+
+                            <br />
+                            <br />
+                            <center>
+                                <input type="submit" class="input" value="Gravar" />
+                            </center>
+                        </form>
+                    <?php } ?>
+                </div>
+            </td>
+        </tr>
+    </table>
+    
+    <table cellpadding="10" cellspacing="0" width="1000" align="center">
+    <tr>
+            <td align="left" valign="top" width="1000" style="background-color:#D3FFE2; border: 1px solid #98FB98; border-radius: 0px 30px 0px 30px">
+
+                <?php
+                $qr = mysqli_query($_SG['conexao'], "SELECT SUM(valor) as total FROM movimentos WHERE tipo=1 && conta=1 && usuario='$usuario' && mes='$mes_hoje' && ano='$ano_hoje'");
+                $row = mysqli_fetch_array($qr);
+                $entradas = $row['total'];
+
+                $qr = mysqli_query($_SG['conexao'], "SELECT SUM(valor) as total FROM movimentos WHERE tipo=0 && conta=1 && usuario='$usuario' && mes='$mes_hoje' && ano='$ano_hoje'");
+                $row = mysqli_fetch_array($qr);
+                $saidas = $row['total'];
+
+                $resultado_mes = $entradas - $saidas;
+                ?>
+
+                <fieldset style="border-radius: 0px 20px 0px 20px">
+                    <legend><strong>Balanço Mensal</strong></legend>
+                    <table cellpadding="0" cellspacing="0" width="100%" >
+                        <tr>
+                            <td><span style="font-size:18px; color:#000">Entradas:</span></td>
+                            <td align="right"><span style="color:rgba(4, 45, 191, 1); font-size:18px"><?php echo formata_dinheiro($entradas) ?></span></td>
+                        </tr>
+                        <tr>
+                            <td><span style="font-size:18px; color:#000">Saídas:</span></td>
+                            <td align="right"><span style="font-size:18px; color:#C00"><?php echo formata_dinheiro($saidas) ?></span></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">
+                                <hr size="1" />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong style="font-size:22px; color:#000">Saldo Final:</strong></td>
+                            <td align="right"><strong style="font-size:22px; color:<?php if ($resultado_mes < 0) echo "#C00";
+                                                                                    else echo "rgba(4, 45, 191, 1)" ?>"><?php echo formata_dinheiro($resultado_mes) ?></strong></td>
+                        </tr>
+                    </table>
+                </fieldset>
+
+            </td>
+        </tr>
+        </table>
+        <br />
+    <table cellpadding="5" cellspacing="0" width="1000" align="center">
+        <tr>
+            <td align="right">
+                <hr size="1" />
+            </td>
+        </tr>
+    </table>
+    <table cellpadding="5" cellspacing="0" width="1000" align="center">
+        <tr>
+            <td colspan="3">
+                <div style="float:right; text-align:right">
+                    <form name="form_filtro_cat" method="get" action="">
+                        <input type="hidden" name="mes" value="<?php echo $mes_hoje ?>">
+                        <input type="hidden" name="ano" value="<?php echo $ano_hoje ?>">
+                        <b>Filtrar por categoria:</b> <select name="filtro_cat" onchange="form_filtro_cat.submit()" style="border-radius: 0px 7px 0px 7px">
+                            <option value="">Tudo</option>
+                            <?php
+                            $qr = mysqli_query($_SG['conexao'], "SELECT DISTINCT c.id, c.nome, c.usuario FROM categorias c, movimentos m WHERE m.cat=c.id && c.usuario='$usuario' && m.mes=$mes_hoje && m.ano=$ano_hoje && m.conta=1 ORDER BY c.nome");
+                            while ($row = mysqli_fetch_array($qr)) {
+                            ?>
+                                <option <?php if (isset($_GET['filtro_cat']) && $_GET['filtro_cat'] == $row['id']) echo "selected=selected" ?> value="<?php echo $row['id'] ?>"><?php echo $row['nome'] ?></option>
+                            <?php } ?>
+                        </select>
+                    </form>
+                </div>
+
+                <h2>Movimentos deste mês</h2>
+
+            </td>
+        <tr>
+        <tr style="background-color:#D3D3D3">
+            <td align="center" width="15" style="border-radius: 0px 0px 0px 10px; border-left: 1px solid #808080; border-bottom: 1px solid #808080;"><b><?php echo "Dia" ?></td>
+            <td style="border-bottom: 1px solid #808080;"><b><?php echo "Descrição e Forma de Pagamento" ?></td>
+            <td align="right" style="border-radius: 0px 0px 10px 0px; border-bottom: 1px solid #808080; border-right: 1px solid #808080;" width="100"><b><?php echo "Valor" ?></td>
+        </tr>
+        <?php
+        $filtros = "";
+        if (isset($_GET['filtro_cat'])) {
+            if ($_GET['filtro_cat'] != '') {
+                $filtros = "&& cat='" . $_GET['filtro_cat'] . "'";
+
+                $qr = mysqli_query(
+                    $_SG['conexao'],
+                    "SELECT SUM(valor) as total FROM movimentos WHERE tipo=1 && conta=1 && usuario='$usuario' && mes='$mes_hoje' && ano='$ano_hoje' $filtros"
+                );
+                $row = mysqli_fetch_array($qr);
+                $entradas = $row['total'];
+
+                $qr = mysqli_query(
+                    $_SG['conexao'],
+                    "SELECT SUM(valor) as total FROM movimentos WHERE tipo=0 && conta=1 && usuario='$usuario' && mes='$mes_hoje' && ano='$ano_hoje' $filtros"
+                );
+                $row = mysqli_fetch_array($qr);
+                $saidas = $row['total'];
+
+                $resultado_mes = $entradas - $saidas;
+            }
+        }
+
+        $qr = mysqli_query($_SG['conexao'], "SELECT * FROM movimentos WHERE conta=1 && usuario='$usuario' && mes='$mes_hoje' && ano='$ano_hoje' $filtros ORDER BY dia");
+        $cont = 0;
+        while ($row = mysqli_fetch_array($qr)) {
+            $cont++;
+
+            $cat = $row['cat'];
+            $qr2 = mysqli_query($_SG['conexao'], "SELECT nome FROM categorias WHERE id='$cat'");
+            $row2 = mysqli_fetch_array($qr2);
+            $categoria = $row2['nome'];
+
+            //$comprovante=$row['comp_img'];
+        ?>
+
+            <tr style="background-color:<?php if ($cont % 2 == 0)
+                                            echo "#E0E0E0";
+                                        else
+                                            echo "#F1F1F1" ?>">
+                <td align="center" width="15" style="border-radius: 7px 0px 0px 7px"><?php echo $row['dia'] ?></td>
+                <td><?php echo $row['descricao'] ?> <?php $parcelas = $row['parcelas'];
+                                                    $nparcelas = $row['nparcela'];
+                                                    if ($parcelas >= 2) echo "Parcela " . $nparcelas . "/" . $parcelas . "." ?> <em>(<a href="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>&filtro_cat=<?php echo $cat ?>"><?php echo $categoria ?></a>)</em><?php if (empty($comprovante)) echo "";
+                                                                                                                                                                                                                                                                                                                                            else echo "<a href=./upload_temp/download.php?id=$comprovante style=font-size:12px> [Comprovante]</a>" ?> <a href="javascript:;" style="font-size:12px; color:#666" onclick="abreFecha('editar_mov_<?php echo $row['id'] ?>');" title="Editar">[editar]</a> <a href="javascript:;" style="font-size:12px; color:#666" onclick="abreFecha('hist_mov_<?php echo $row['id'] ?>');" title="Ver histórico"> [Histórico]</a><br>
+                </td>
+                <td align="right" style="border-radius: 0px 7px 7px 0px"><strong style="color:<?php if ($row['tipo'] == 0) echo "#C00";
+                                                        else echo "rgba(4, 45, 191, 1)" ?>"><?php echo formata_dinheiro($row['valor']) ?></strong></td>
+            </tr>
+            <tr style="display:none; background-color:<?php if ($cont % 2 == 0) echo "#F1F1F1";
+                                                        else echo "#E0E0E0" ?>" id="editar_mov_<?php echo $row['id'] ?>">
+                <td colspan="3">
+                    <hr />
+
+                    <form enctype="multipart/form-data" method="post" action="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>">
+                        <input type="hidden" name="acao" value="editar_mov" />
+                        <input type="hidden" name="id" value="<?php echo $row['id'] ?>" />
+
+                        <b>Dia:</b> <input type="text" name="dia" size="2" maxlength="2" value="<?php echo $row['dia'] ?>" />&nbsp;|&nbsp;
+                        <b>Mês:</b> <input type="text" name="mes" size="2" maxlength="2" value="<?php echo $row['mes'] ?>" />&nbsp;|&nbsp;
+                        <b>Ano:</b> <input type="text" name="ano" size="3" maxlength="4" value="<?php echo $row['ano'] ?>" />&nbsp;|&nbsp;
+                        <b>Tipo:</b> <label for="tipo_receita<?php echo $row['id'] ?>" style="color:rgba(4, 45, 191, 1)"><input <?php if ($row['tipo'] == 1) echo "checked=checked" ?> type="radio" name="tipo" value="1" id="tipo_receita<?php echo $row['id'] ?>" /> Receita</label>&nbsp; <label for="tipo_despesa<?php echo $row['id'] ?>" style="color:#C00"><input <?php if ($row['tipo'] == 0) echo "checked=checked" ?> type="radio" name="tipo" value="0" id="tipo_despesa<?php echo $row['id'] ?>" /> Despesa</label>&nbsp;&nbsp;&nbsp;|&nbsp;
+                        <b>Categoria:</b>
+                        <select name="cat">
+                            <?php
+                            $qr2 = mysqli_query($_SG['conexao'], "SELECT * FROM categorias where usuario='$usuario' ORDER BY nome");
+                            while ($row2 = mysqli_fetch_array($qr2)) {
+                            ?>
+                                <option <?php if ($row2['id'] == $row['cat']) echo "selected" ?> value="<?php echo $row2['id'] ?>"><?php echo $row2['nome'] ?></option>
+                            <?php } ?>
+                        </select><br /><br />
+                        <b>Descricao:</b> <input type="text" name="descricao" value="<?php echo $row['descricao'] ?>" size="50" maxlength="255" />
+                        &nbsp; | &nbsp;
+                        <b>Valor:</b> R$ <input type=text id="<?php echo $row['id'] ?>" value="<?php echo $row['valor'] ?>" name=valor length=15 onKeyPress="return(FormataReais(this,'.',',',event))">
+                        <input type="hidden" name="conta" value="1" <?php if ($row['conta'] == 1) echo "checked" ?> />
+                        <br><br>
+                        &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+                        <input type="submit" class="input" value="Gravar" />
+                    </form>
+                    <div style="text-align: right">
+                        <a style="color:#FF0000" onclick="return confirm('Tem certeza que deseja apagar?')" href="?mes=<?php echo $mes_hoje ?>&ano=<?php echo $ano_hoje ?>&acao=apagar&id=<?php echo $row['id'] ?>" title="Remover">[remover]</a>
+                    </div>
+                    <hr />
+                </td>
+            </tr>
+            <tr style="display:none; background-color:<?php if ($cont % 2 == 0)
+                                                            echo "#F1F1F1";
+                                                        else
+                                                            echo "#E0E0E0" ?>" id="hist_mov_<?php echo
+                                                    $row['id'] ?>">
+                <td align="center" width="15"></td>
+                <td>
+                    <?php
+                    $id = $row['id'];
+                    $hist = mysqli_query($_SG['conexao'], "SELECT * FROM historico WHERE id_mov = '$id' ORDER BY id");
+                    $qrhist = mysqli_query(
+                        $_SG['conexao'],
+                        "SELECT j.just, h.data, h.id FROM (just_ed j INNER JOIN historico h ON j.id = h.just_id) INNER JOIN movimentos g ON h.id_mov = g.id && g.id = '$id' ORDER BY h.id"
+                    );
+
+                    if (mysqli_num_rows($hist) !== 0) {
+                        echo "Histórico de alterações:" . "<br>";
+                        while ($rowhist = mysqli_fetch_array($qrhist)) {
+                            echo date('d/m/y', strtotime($rowhist['data'])) . "  -  " . $rowhist['just'] .
+                                "<br>";
+                        }
+                    } else {
+                        echo "Não há histórico de alterações.";
+                    }
+                    ?>
+                </td>
+                <td></td>
+            </tr>
+
+        <?php
+        }
+        ?>
+        <tr>
+            <td colspan="3" align="right">
+                <strong style="font-size:22px; color:<?php if ($resultado_mes < 0)
+                                                            echo "#C00";
+                                                        else
+                                                            echo "rgba(4, 45, 191, 1)" ?>"><?php echo
+                                    formata_dinheiro($resultado_mes) ?></strong>
+            </td>
+        </tr>
+    </table>
+
+    <table cellpadding="5" cellspacing="0" width="1000" align="center">
+        <tr>
+            <td align="right">
+                <hr size="1" />
+                <?php echo $versao ?>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>
