@@ -2,7 +2,7 @@
 
 Livro de caixa simples para gerenciar entradas e saídas de caixa.
 
-Fonte original dos arquivos neste [site](http://www.paulocollares.com.br/2013/06/sistema-simples-de-livro-caixa-em-php/)
+Fonte original dos arquivos neste [site](https://paulocollares.com.br/programacao/sistema-simples-de-livro-caixa-em-php/)
 
 
 
